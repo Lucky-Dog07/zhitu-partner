@@ -1,0 +1,379 @@
+{
+  "name": "职途伴侣 - 智能学习助手",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "chat",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "chat-webhook",
+      "name": "对话Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        240,
+        400
+      ],
+      "webhookId": "learning-chat"
+    },
+    {
+      "parameters": {
+        "jsCode": "// 解析用户消息和上下文\nconst requestBody = $input.item.json.body;\n\nreturn {\n  user_id: requestBody.user_id || 'anonymous',\n  message: requestBody.message || '',\n  context: requestBody.context || {},\n  session_id: requestBody.session_id || `session_${Date.now()}`,\n  timestamp: new Date().toISOString()\n};"
+      },
+      "id": "parse-chat-request",
+      "name": "解析对话请求",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        460,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT * FROM skill_mastery WHERE user_id = '{{ $json.user_id }}' ORDER BY last_reviewed DESC LIMIT 20",
+        "options": {}
+      },
+      "id": "load-user-history",
+      "name": "加载用户学习历史",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        680,
+        400
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "2",
+          "name": "PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// 构建用户画像和上下文\nconst userHistory = $input.all();\nconst chatRequest = $('解析对话请求').item.json;\n\n// 分析用户掌握的技能\nconst masteredSkills = [];\nconst weakSkills = [];\n\nif (userHistory && userHistory.length > 0) {\n  userHistory.forEach(record => {\n    const data = record.json;\n    if (data.mastery_level >= 70) {\n      masteredSkills.push(data.skill_name);\n    } else if (data.mastery_level < 50) {\n      weakSkills.push(data.skill_name);\n    }\n  });\n}\n\nconst userContext = {\n  user_id: chatRequest.user_id,\n  message: chatRequest.message,\n  session_id: chatRequest.session_id,\n  mastered_skills: masteredSkills,\n  weak_skills: weakSkills,\n  total_skills: userHistory.length,\n  context: chatRequest.context\n};\n\nreturn userContext;"
+      },
+      "id": "build-user-context",
+      "name": "构建用户上下文",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        900,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "options": {
+          "systemMessage": "你是"职途伴侣"智能学习助手，专门帮助用户深入理解职业技能。\\n\\n当前用户情况：\\n- 已掌握的技能：{{ $json.mastered_skills.join(', ') || '暂无' }}\\n- 需要加强的技能：{{ $json.weak_skills.join(', ') || '暂无' }}\\n- 学习进度：{{ $json.total_skills }}个技能点\\n\\n你的任务：\\n1. 根据用户的问题，提供详细、专业的解答\\n2. 结合用户的掌握情况，给出个性化建议\\n3. 对于用户掌握较弱的技能，提供更多基础讲解\\n4. 对于已掌握的技能，可以深入讲解高级应用\\n5. 主动推荐相关的学习资源\\n6. 鼓励用户进行实践和练习\\n\\n回答要求：\\n- 语言通俗易懂，但保持专业性\\n- 提供具体的代码示例或实例\\n- 结构清晰，使用列表或分点说明\\n- 适当使用类比和比喻帮助理解"
+        }
+      },
+      "id": "ai-chat-agent",
+      "name": "AI对话Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.8,
+      "position": [
+        1120,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4-turbo-preview",
+        "options": {
+          "temperature": 0.8,
+          "maxTokens": 1500
+        }
+      },
+      "id": "chat-llm",
+      "name": "对话模型",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1,
+      "position": [
+        1120,
+        580
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "1",
+          "name": "OpenAI API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $('解析对话请求').item.json.session_id }}",
+        "contextWindowLength": 10
+      },
+      "id": "chat-memory",
+      "name": "对话记忆",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        1120,
+        760
+      ]
+    },
+    {
+      "parameters": {
+        "name": "search_knowledge",
+        "description": "搜索知识库中的相关内容，帮助回答用户问题。",
+        "language": "javaScript",
+        "jsCode": "// 知识库搜索工具\nconst query = $input.item.json.query || $input.item.json.input;\n\n// 这里应该实现向量搜索\n// 模拟搜索结果\nconst searchResults = [\n  {\n    title: `${query}相关知识点1`,\n    content: \"这是知识库中的相关内容...\",\n    relevance: 0.95\n  },\n  {\n    title: `${query}相关知识点2`,\n    content: \"这是另一个相关内容...\",\n    relevance: 0.87\n  }\n];\n\nreturn {\n  query: query,\n  results: searchResults,\n  count: searchResults.length\n};"
+      },
+      "id": "tool-search-knowledge",
+      "name": "知识库搜索工具",
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1,
+      "position": [
+        1340,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "name": "get_examples",
+        "description": "获取指定技能的代码示例和实践案例。",
+        "language": "javaScript",
+        "jsCode": "// 示例获取工具\nconst skillName = $input.item.json.skill_name || $input.item.json.input;\n\nconst examples = [\n  {\n    title: `${skillName}基础示例`,\n    code: `// ${skillName}示例代码\\nconsole.log('示例');`,\n    explanation: \"这个示例展示了基本用法\"\n  },\n  {\n    title: `${skillName}进阶案例`,\n    code: `// ${skillName}进阶代码\\n// 更复杂的实现`,\n    explanation: \"这个案例展示了高级特性\"\n  }\n];\n\nreturn {\n  skill: skillName,\n  examples: examples,\n  total: examples.length\n};"
+      },
+      "id": "tool-get-examples",
+      "name": "示例获取工具",
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1,
+      "position": [
+        1340,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "name": "recommend_next_topic",
+        "description": "根据用户当前的学习进度，推荐下一个学习主题。",
+        "language": "javaScript",
+        "jsCode": "// 学习路径推荐工具\nconst userContext = $('构建用户上下文').item.json;\n\n// 基于用户的掌握情况推荐\nlet recommendation = {\n  next_topic: \"建议学习的下一个主题\",\n  reason: \"基于你当前的掌握情况...\",\n  prerequisites: [],\n  estimated_time: \"1-2周\"\n};\n\nif (userContext.weak_skills && userContext.weak_skills.length > 0) {\n  recommendation.next_topic = userContext.weak_skills[0];\n  recommendation.reason = `你在${userContext.weak_skills[0]}方面还需要加强，建议优先学习这个技能。`;\n} else {\n  recommendation.next_topic = \"探索新的技术领域\";\n  recommendation.reason = \"你的基础已经很扎实了，可以考虑学习更高级的内容。\";\n}\n\nreturn recommendation;"
+      },
+      "id": "tool-recommend-next",
+      "name": "学习路径推荐工具",
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1,
+      "position": [
+        1340,
+        440
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// 格式化AI响应\nconst aiResponse = $input.item.json;\nconst userContext = $('构建用户上下文').item.json;\n\nconst response = {\n  success: true,\n  user_id: userContext.user_id,\n  session_id: userContext.session_id,\n  response: {\n    message: aiResponse.output || aiResponse.text || \"抱歉，我没能理解您的问题。\",\n    suggestions: [],\n    related_resources: []\n  },\n  user_stats: {\n    mastered_skills: userContext.mastered_skills.length,\n    weak_skills: userContext.weak_skills.length,\n    total_skills: userContext.total_skills\n  },\n  timestamp: new Date().toISOString()\n};\n\n// 添加学习建议\nif (userContext.weak_skills && userContext.weak_skills.length > 0) {\n  response.response.suggestions.push(\n    `💡 建议加强练习：${userContext.weak_skills.slice(0, 3).join('、')}`\n  );\n}\n\nreturn response;"
+      },
+      "id": "format-chat-response",
+      "name": "格式化响应",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1560,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "id": "respond-chat",
+      "name": "响应对话",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        1780,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "schema": {
+          "__rl": true,
+          "mode": "list",
+          "value": "public"
+        },
+        "table": {
+          "__rl": true,
+          "mode": "list",
+          "value": "learning_records"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "user_id": "={{ $('解析对话请求').item.json.user_id }}",
+            "content_type": "chat_interaction",
+            "content_data": "={{ JSON.stringify($json) }}",
+            "action": "chat",
+            "created_at": "={{ new Date().toISOString() }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "log-chat",
+      "name": "记录对话",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1780,
+        580
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "2",
+          "name": "PostgreSQL"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "对话Webhook": {
+      "main": [
+        [
+          {
+            "node": "解析对话请求",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "解析对话请求": {
+      "main": [
+        [
+          {
+            "node": "加载用户学习历史",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "加载用户学习历史": {
+      "main": [
+        [
+          {
+            "node": "构建用户上下文",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "构建用户上下文": {
+      "main": [
+        [
+          {
+            "node": "AI对话Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI对话Agent": {
+      "main": [
+        [
+          {
+            "node": "格式化响应",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "对话模型": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI对话Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "对话记忆": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI对话Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "知识库搜索工具": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI对话Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "示例获取工具": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI对话Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "学习路径推荐工具": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI对话Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "格式化响应": {
+      "main": [
+        [
+          {
+            "node": "响应对话",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "记录对话",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "1",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "职途伴侣"
+  },
+  "id": "learning-chat-assistant",
+  "tags": []
+}
+

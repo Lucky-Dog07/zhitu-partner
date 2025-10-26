@@ -1,0 +1,41 @@
+{
+  "name": "zhitu-frontend",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@ant-design/charts": "^2.6.6",
+    "@ant-design/pro-components": "^2.8.10",
+    "@ant-design/pro-layout": "^7.22.7",
+    "@uiw/react-md-editor": "^4.0.8",
+    "antd": "^5.12.8",
+    "axios": "^1.6.5",
+    "dayjs": "^1.11.18",
+    "markmap-lib": "^0.18.12",
+    "markmap-view": "^0.18.12",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-markdown": "^9.1.0",
+    "react-quill": "^2.0.0",
+    "react-router-dom": "^6.21.1",
+    "react-syntax-highlighter": "^15.5.0",
+    "rehype-raw": "^7.0.0",
+    "remark-gfm": "^4.0.1",
+    "zustand": "^4.4.7"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.48",
+    "@types/react-dom": "^18.2.18",
+    "@types/react-syntax-highlighter": "^15.5.11",
+    "@typescript-eslint/eslint-plugin": "^6.19.0",
+    "@typescript-eslint/parser": "^6.19.0",
+    "@vitejs/plugin-react": "^4.2.1",
+    "typescript": "^5.3.3",
+    "vite": "^5.0.11"
+  }
+}

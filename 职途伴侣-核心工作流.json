@@ -1,0 +1,405 @@
+{
+  "name": "职途伴侣 - 学习路线生成器",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "generate-learning-path",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook触发器",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        240,
+        300
+      ],
+      "webhookId": "learning-path-gen"
+    },
+    {
+      "parameters": {
+        "jsCode": "// 解析和验证请求参数\nconst requestBody = $input.item.json.body;\n\nreturn {\n  user_id: requestBody.user_id || 'anonymous',\n  position: requestBody.position || '',\n  job_description: requestBody.job_description || '',\n  content_types: requestBody.content_types || ['mindmap', 'knowledge', 'interview'],\n  language: requestBody.language || 'zh-CN',\n  timestamp: new Date().toISOString()\n};"
+      },
+      "id": "parse-request",
+      "name": "解析请求参数",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        460,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "options": {
+          "systemMessage": "你是"职途伴侣"AI助手，专门帮助用户提升职业技能。\n\n你可以使用以下工具：\n1. extract_skills - 从职位描述中提取技能要求\n2. generate_mindmap - 生成技能思维导图\n3. generate_knowledge - 生成知识点详解\n4. generate_interview - 生成面试题库\n5. recommend_courses - 推荐相关课程\n6. recommend_books - 推荐相关书籍\n7. recommend_certifications - 推荐职业证书\n\n请根据用户需求，合理选择和使用这些工具，为用户生成完整的学习路线。\n\n注意：\n- 确保生成的内容专业、准确、实用\n- 优先使用中文回答\n- 内容要结构化、易于理解\n- 为用户提供可操作的学习建议"
+        }
+      },
+      "id": "ai-agent-main",
+      "name": "AI Agent主控制器",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.8,
+      "position": [
+        680,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4-turbo-preview",
+        "options": {
+          "temperature": 0.7,
+          "maxTokens": 2000
+        }
+      },
+      "id": "openai-chat-model",
+      "name": "OpenAI Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1,
+      "position": [
+        680,
+        480
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "1",
+          "name": "OpenAI API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "name": "extract_skills",
+        "description": "从职位描述或JD中提取关键技能要求。输入职位描述文本，输出结构化的技能列表。",
+        "language": "javaScript",
+        "jsCode": "// 技能提取工具\nconst jobDescription = $input.item.json.job_description || $input.item.json.input;\n\n// 调用LLM进行技能提取\nconst extractPrompt = `请从以下职位描述中提取关键技能要求，按类别整理：\n\n职位描述：\n${jobDescription}\n\n请以JSON格式返回，结构如下：\n{\n  \"skills\": [\n    {\n      \"category\": \"分类名称\",\n      \"skills\": [\"技能1\", \"技能2\"],\n      \"level\": \"required/preferred\"\n    }\n  ]\n}`;\n\n// 这里应该调用LLM API\n// 为了演示，返回示例数据\nreturn {\n  skills: [\n    {\n      category: \"前端技术\",\n      skills: [\"React\", \"Vue\", \"TypeScript\", \"Webpack\"],\n      level: \"required\"\n    },\n    {\n      category: \"工程化\",\n      skills: [\"Git\", \"CI/CD\", \"单元测试\"],\n      level: \"required\"\n    },\n    {\n      category: \"后端知识\",\n      skills: [\"Node.js\", \"RESTful API\", \"数据库基础\"],\n      level: \"preferred\"\n    }\n  ],\n  extracted_from: jobDescription.substring(0, 100) + \"...\",\n  timestamp: new Date().toISOString()\n};"
+      },
+      "id": "tool-extract-skills",
+      "name": "技能提取工具",
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1,
+      "position": [
+        900,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "name": "generate_mindmap",
+        "description": "根据技能列表生成结构化的思维导图。输入技能数组，输出Markdown格式的思维导图。",
+        "language": "javaScript",
+        "jsCode": "// 思维导图生成工具\nconst skills = $input.item.json.skills || [];\nconst position = $input.item.json.position || \"职位\";\n\n// 生成Markdown格式的思维导图\nlet mindmap = `# ${position}技能树\\n\\n`;\n\nif (Array.isArray(skills)) {\n  skills.forEach(category => {\n    mindmap += `## ${category.category}\\n`;\n    if (Array.isArray(category.skills)) {\n      category.skills.forEach(skill => {\n        mindmap += `  - ${skill}\\n`;\n      });\n    }\n    mindmap += '\\n';\n  });\n} else {\n  mindmap += `## 核心技能\\n`;\n  mindmap += `  - 技能分析中...\\n`;\n}\n\nreturn {\n  mindmap: mindmap,\n  format: \"markdown\",\n  node_count: Array.isArray(skills) ? skills.length : 0,\n  generated_at: new Date().toISOString()\n};"
+      },
+      "id": "tool-generate-mindmap",
+      "name": "思维导图工具",
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1,
+      "position": [
+        900,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "name": "generate_knowledge",
+        "description": "为指定技能生成详细的知识点解析，包括标题、专业解释和通俗说明。",
+        "language": "javaScript",
+        "jsCode": "// 知识点生成工具\nconst skillName = $input.item.json.skill_name || $input.item.json.input;\n\n// 模拟LLM生成知识点\nconst knowledgePoint = {\n  title: skillName,\n  professional: `${skillName}是现代开发中的重要技术，它提供了...[这里应该调用LLM生成详细的专业解释]`,\n  simple: `简单来说，${skillName}就像...[这里应该调用LLM生成通俗易懂的解释]`,\n  examples: [\n    `${skillName}的基础用法示例`,\n    `${skillName}的进阶应用场景`\n  ],\n  related_concepts: [],\n  difficulty: \"中级\",\n  learning_time: \"2-4周\"\n};\n\nreturn {\n  knowledge_point: knowledgePoint,\n  generated_at: new Date().toISOString()\n};"
+      },
+      "id": "tool-generate-knowledge",
+      "name": "知识点工具",
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1,
+      "position": [
+        900,
+        340
+      ]
+    },
+    {
+      "parameters": {
+        "name": "generate_interview",
+        "description": "为指定技能生成常见面试题，包括题目、答案和解题思路。",
+        "language": "javaScript",
+        "jsCode": "// 面试题生成工具\nconst skillName = $input.item.json.skill_name || $input.item.json.input;\nconst count = $input.item.json.count || 5;\n\n// 模拟生成面试题\nconst questions = [];\nfor (let i = 1; i <= count; i++) {\n  questions.push({\n    id: `q_${i}`,\n    question: `关于${skillName}的面试问题${i}：[这里应该调用LLM生成真实面试题]`,\n    answer: `[这里应该是详细的答案]`,\n    approach: `[这里应该是解题思路和技巧]`,\n    difficulty: [\"简单\", \"中等\", \"困难\"][Math.floor(Math.random() * 3)],\n    tags: [skillName, \"核心概念\"]\n  });\n}\n\nreturn {\n  questions: questions,\n  skill: skillName,\n  total: questions.length,\n  generated_at: new Date().toISOString()\n};"
+      },
+      "id": "tool-generate-interview",
+      "name": "面试题工具",
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1,
+      "position": [
+        900,
+        460
+      ]
+    },
+    {
+      "parameters": {
+        "name": "recommend_courses",
+        "description": "搜索并推荐与技能相关的优质在线课程。",
+        "language": "javaScript",
+        "jsCode": "// 课程推荐工具\nconst skillName = $input.item.json.skill_name || $input.item.json.input;\n\n// 模拟课程推荐（实际应该调用课程平台API）\nconst courses = [\n  {\n    title: `${skillName}从入门到精通`,\n    platform: \"慕课网\",\n    duration: \"32小时\",\n    students: \"12.5k\",\n    rating: 4.5,\n    price: \"¥299\",\n    url: \"https://www.imooc.com/...\",\n    description: `系统学习${skillName}的核心概念和实战技巧`\n  },\n  {\n    title: `${skillName}高级实战课程`,\n    platform: \"极客时间\",\n    duration: \"24小时\",\n    students: \"8.2k\",\n    rating: 4.7,\n    price: \"¥199\",\n    url: \"https://time.geekbang.org/...\",\n    description: `深入${skillName}的高级特性和最佳实践`\n  }\n];\n\nreturn {\n  courses: courses,\n  skill: skillName,\n  total: courses.length,\n  generated_at: new Date().toISOString()\n};"
+      },
+      "id": "tool-recommend-courses",
+      "name": "课程推荐工具",
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1,
+      "position": [
+        900,
+        580
+      ]
+    },
+    {
+      "parameters": {
+        "name": "recommend_books",
+        "description": "推荐与技能相关的专业书籍。",
+        "language": "javaScript",
+        "jsCode": "// 书籍推荐工具\nconst skillName = $input.item.json.skill_name || $input.item.json.input;\n\n// 模拟书籍推荐\nconst books = [\n  {\n    title: `${skillName}权威指南`,\n    author: \"技术专家\",\n    rating: 9.2,\n    publisher: \"人民邮电出版社\",\n    description: `${skillName}领域的经典著作，深入浅出地讲解核心原理`,\n    tags: [skillName, \"入门\", \"进阶\"]\n  },\n  {\n    title: `${skillName}实战精解`,\n    author: \"行业大咖\",\n    rating: 8.8,\n    publisher: \"机械工业出版社\",\n    description: `通过大量实战案例掌握${skillName}的应用技巧`,\n    tags: [skillName, \"实战\", \"案例\"]\n  }\n];\n\nreturn {\n  books: books,\n  skill: skillName,\n  total: books.length,\n  generated_at: new Date().toISOString()\n};"
+      },
+      "id": "tool-recommend-books",
+      "name": "书籍推荐工具",
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1,
+      "position": [
+        900,
+        700
+      ]
+    },
+    {
+      "parameters": {
+        "name": "recommend_certifications",
+        "description": "推荐与技能相关的职业认证和证书。",
+        "language": "javaScript",
+        "jsCode": "// 证书推荐工具\nconst skillName = $input.item.json.skill_name || $input.item.json.input;\n\n// 模拟证书推荐\nconst certifications = [\n  {\n    name: `${skillName}开发专家认证`,\n    provider: \"阿里云/腾讯云\",\n    difficulty: \"中级\",\n    preparation_time: \"2-3个月\",\n    benefits: \"行业认可度高，提升求职竞争力\",\n    url: \"https://...\",\n    exam_fee: \"¥1200\"\n  }\n];\n\nreturn {\n  certifications: certifications,\n  skill: skillName,\n  total: certifications.length,\n  generated_at: new Date().toISOString()\n};"
+      },
+      "id": "tool-recommend-certifications",
+      "name": "证书推荐工具",
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1,
+      "position": [
+        900,
+        820
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// 格式化和汇总所有Agent的输出结果\nconst agentOutput = $input.item.json;\n\n// 构建最终响应\nconst response = {\n  success: true,\n  user_id: $('解析请求参数').item.json.user_id,\n  position: $('解析请求参数').item.json.position,\n  learning_path: {\n    skills: agentOutput.skills || [],\n    mindmap: agentOutput.mindmap || '',\n    knowledge_points: agentOutput.knowledge_points || [],\n    interview_questions: agentOutput.interview_questions || [],\n    recommended_resources: {\n      courses: agentOutput.courses || [],\n      books: agentOutput.books || [],\n      certifications: agentOutput.certifications || []\n    }\n  },\n  metadata: {\n    generated_at: new Date().toISOString(),\n    processing_time: '计算中...',\n    version: '1.0.0'\n  },\n  message: '学习路线生成成功！'\n};\n\nreturn response;"
+      },
+      "id": "format-response",
+      "name": "格式化输出",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "id": "respond-to-webhook",
+      "name": "响应Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        1340,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "schema": {
+          "__rl": true,
+          "mode": "list",
+          "value": "public"
+        },
+        "table": {
+          "__rl": true,
+          "mode": "list",
+          "value": "learning_records"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "user_id": "={{ $('解析请求参数').item.json.user_id }}",
+            "position": "={{ $('解析请求参数').item.json.position }}",
+            "content_type": "learning_path",
+            "content_data": "={{ JSON.stringify($json) }}",
+            "created_at": "={{ new Date().toISOString() }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "save-to-database",
+      "name": "保存到数据库",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1340,
+        480
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "2",
+          "name": "PostgreSQL"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook触发器": {
+      "main": [
+        [
+          {
+            "node": "解析请求参数",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "解析请求参数": {
+      "main": [
+        [
+          {
+            "node": "AI Agent主控制器",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent主控制器": {
+      "main": [
+        [
+          {
+            "node": "格式化输出",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent主控制器",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "技能提取工具": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent主控制器",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "思维导图工具": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent主控制器",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "知识点工具": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent主控制器",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "面试题工具": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent主控制器",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "课程推荐工具": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent主控制器",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "书籍推荐工具": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent主控制器",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "证书推荐工具": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent主控制器",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "格式化输出": {
+      "main": [
+        [
+          {
+            "node": "响应Webhook",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "保存到数据库",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "1",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "职途伴侣"
+  },
+  "id": "learning-path-generator",
+  "tags": []
+}
+
